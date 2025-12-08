@@ -8,7 +8,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { Moon, Sun, User, LogOut, Shield, Sparkles } from 'lucide-react';
+import { Moon, Sun, User, LogOut, Shield, Sparkles, LayoutDashboard } from 'lucide-react';
 import { useTheme } from '@/hooks/use-theme';
 
 export default function Header() {
@@ -52,6 +52,12 @@ export default function Header() {
                   <p className="text-xs text-muted-foreground">{profile.email || profile.phone}</p>
                 </div>
                 <DropdownMenuSeparator />
+                <DropdownMenuItem asChild>
+                  <Link to="/dashboard" className="cursor-pointer">
+                    <LayoutDashboard className="mr-2 h-4 w-4" />
+                    Dashboard
+                  </Link>
+                </DropdownMenuItem>
                 {profile.role === 'admin' && (
                   <>
                     <DropdownMenuItem asChild>
@@ -60,9 +66,9 @@ export default function Header() {
                         Admin Panel
                       </Link>
                     </DropdownMenuItem>
-                    <DropdownMenuSeparator />
                   </>
                 )}
+                <DropdownMenuSeparator />
                 <DropdownMenuItem onClick={handleSignOut} className="cursor-pointer">
                   <LogOut className="mr-2 h-4 w-4" />
                   Logout

@@ -49,20 +49,20 @@ export function ChatMessage({ message, isStreaming = false }: ChatMessageProps) 
   return (
     <div
       className={cn(
-        'flex gap-4 p-6 rounded-xl',
-        message.role === 'user' ? 'bg-muted/50' : 'bg-card'
+        'flex gap-4 p-6 rounded-xl animate-fade-in',
+        message.role === 'user' ? 'bg-muted/50' : 'bg-card border border-border'
       )}
     >
       <div
         className={cn(
           'flex-shrink-0 w-10 h-10 rounded-full flex items-center justify-center',
-          message.role === 'user' ? 'bg-primary/10' : 'bg-primary'
+          message.role === 'user' ? 'bg-primary/10' : 'bg-gradient-primary'
         )}
       >
         {message.role === 'user' ? (
           <User className="w-5 h-5 text-primary" />
         ) : (
-          <Sparkles className="w-5 h-5 text-primary-foreground" />
+          <Sparkles className="w-5 h-5 text-white" />
         )}
       </div>
 
@@ -88,31 +88,32 @@ export function ChatMessage({ message, isStreaming = false }: ChatMessageProps) 
         </div>
 
         {message.image_data && (
-          <div className="max-w-sm">
+          <div className="rounded-lg overflow-hidden border border-border max-w-md">
             <img
               src={message.image_data}
               alt="Uploaded"
-              className="rounded-lg border border-border"
+              className="w-full h-auto"
+              loading="lazy"
             />
           </div>
         )}
 
-        <div className="prose prose-sm dark:prose-invert max-w-none">
-          {message.role === 'assistant' ? (
-            <div
-              className="markdown-content"
-              dangerouslySetInnerHTML={{ __html: renderedContent }}
-            />
-          ) : (
-            <p className="whitespace-pre-wrap break-words">{message.content}</p>
-          )}
-        </div>
+        {message.role === 'assistant' ? (
+          <div
+            className="prose prose-sm dark:prose-invert max-w-none markdown-content"
+            dangerouslySetInnerHTML={{ __html: renderedContent }}
+          />
+        ) : (
+          <p className="text-foreground whitespace-pre-wrap break-words">{renderedContent}</p>
+        )}
 
         {isStreaming && (
-          <div className="typing-indicator">
-            <span />
-            <span />
-            <span />
+          <div className="flex items-center gap-2 text-muted-foreground">
+            <div className="typing-indicator">
+              <span></span>
+              <span></span>
+              <span></span>
+            </div>
           </div>
         )}
       </div>

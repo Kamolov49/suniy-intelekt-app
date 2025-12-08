@@ -1,6 +1,7 @@
 import ChatPage from './pages/ChatPage';
 import LoginPage from './pages/LoginPage';
 import AdminPage from './pages/AdminPage';
+import DashboardPage from './pages/DashboardPage';
 import ProtectedRoute from './components/common/ProtectedRoute';
 import type { ReactNode } from 'react';
 
@@ -18,6 +19,16 @@ const routes: RouteConfig[] = [
     element: (
       <ProtectedRoute>
         <ChatPage />
+      </ProtectedRoute>
+    ),
+    visible: false,
+  },
+  {
+    name: 'Dashboard',
+    path: '/dashboard',
+    element: (
+      <ProtectedRoute>
+        <DashboardPage />
       </ProtectedRoute>
     ),
     visible: false,

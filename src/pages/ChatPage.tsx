@@ -6,7 +6,6 @@ import { ChatSidebar } from '@/components/chat/ChatSidebar';
 import { ChatMessage } from '@/components/chat/ChatMessage';
 import { ChatInput } from '@/components/chat/ChatInput';
 import { Button } from '@/components/ui/button';
-import { ScrollArea } from '@/components/ui/scroll-area';
 import { useToast } from '@/hooks/use-toast';
 import { Menu, X, RotateCcw, Sparkles } from 'lucide-react';
 import type { Chat, Message } from '@/types/types';
@@ -20,8 +19,11 @@ export default function ChatPage() {
   const [isStreaming, setIsStreaming] = useState(false);
   const [streamingMessage, setStreamingMessage] = useState('');
   const [sidebarOpen, setSidebarOpen] = useState(true);
-  const scrollRef = useRef<HTMLDivElement>(null);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const messagesContainerRef = useRef<HTMLDivElement>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
+  const userScrolledRef = useRef(false);
+  const lastScrollTopRef = useRef(0);
 
   useEffect(() => {
     if (profile) {
@@ -36,13 +38,35 @@ export default function ChatPage() {
   }, [currentChatId]);
 
   useEffect(() => {
-    scrollToBottom();
+    if (!userScrolledRef.current) {
+      scrollToBottom('smooth');
+    }
   }, [messages, streamingMessage]);
 
-  const scrollToBottom = () => {
-    if (scrollRef.current) {
-      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+  useEffect(() => {
+    if (isStreaming) {
+      userScrolledRef.current = false;
     }
+  }, [isStreaming]);
+
+  const handleScroll = () => {
+    const container = messagesContainerRef.current;
+    if (!container) return;
+
+    const { scrollTop, scrollHeight, clientHeight } = container;
+    const isAtBottom = Math.abs(scrollHeight - clientHeight - scrollTop) < 50;
+
+    if (scrollTop < lastScrollTopRef.current && !isAtBottom) {
+      userScrolledRef.current = true;
+    } else if (isAtBottom) {
+      userScrolledRef.current = false;
+    }
+
+    lastScrollTopRef.current = scrollTop;
+  };
+
+  const scrollToBottom = (behavior: ScrollBehavior = 'smooth') => {
+    messagesEndRef.current?.scrollIntoView({ behavior, block: 'end' });
   };
 
   const loadChats = async () => {
@@ -58,6 +82,8 @@ export default function ChatPage() {
   const loadMessages = async (chatId: string) => {
     const chatMessages = await messagesApi.getChatMessages(chatId);
     setMessages(chatMessages);
+    userScrolledRef.current = false;
+    setTimeout(() => scrollToBottom('auto'), 100);
   };
 
   const handleNewChat = async () => {
@@ -79,22 +105,24 @@ export default function ChatPage() {
     const success = await chatsApi.updateChatTitle(chatId, newTitle);
     if (success) {
       setChats(chats.map((chat) => (chat.id === chatId ? { ...chat, title: newTitle } : chat)));
-      toast({
-        title: 'Success',
-        description: 'Chat renamed successfully',
-      });
     }
   };
 
   const handleDeleteChat = async (chatId: string) => {
     const success = await chatsApi.deleteChat(chatId);
     if (success) {
-      setChats(chats.filter((chat) => chat.id !== chatId));
+      const updatedChats = chats.filter((chat) => chat.id !== chatId);
+      setChats(updatedChats);
+
       if (currentChatId === chatId) {
-        const remainingChats = chats.filter((chat) => chat.id !== chatId);
-        setCurrentChatId(remainingChats[0]?.id || null);
-        setMessages([]);
+        if (updatedChats.length > 0) {
+          setCurrentChatId(updatedChats[0].id);
+        } else {
+          setCurrentChatId(null);
+          setMessages([]);
+        }
       }
+
       toast({
         title: 'Success',
         description: 'Chat deleted successfully',
@@ -104,23 +132,33 @@ export default function ChatPage() {
 
   const handleSendMessage = async (content: string, imageData: string | null) => {
     if (!currentChatId || !profile) {
-      if (!currentChatId) {
-        await handleNewChat();
+      const newChat = await chatsApi.createChat(profile!.id);
+      if (newChat) {
+        setChats([newChat, ...chats]);
+        setCurrentChatId(newChat.id);
+        await sendMessageToChat(newChat.id, content, imageData);
       }
       return;
     }
 
-    const userMessage = await messagesApi.createMessage(currentChatId, 'user', content, imageData);
-    if (!userMessage) {
-      toast({
-        title: 'Error',
-        description: 'Failed to send message',
-        variant: 'destructive',
-      });
-      return;
+    await sendMessageToChat(currentChatId, content, imageData);
+  };
+
+  const sendMessageToChat = async (chatId: string, content: string, imageData: string | null) => {
+    const userMessage = await messagesApi.createMessage(chatId, 'user', content, imageData);
+    if (!userMessage) return;
+
+    setMessages((prev) => [...prev, userMessage]);
+    userScrolledRef.current = false;
+
+    if (messages.length === 0) {
+      const firstWords = content.split(' ').slice(0, 5).join(' ');
+      await chatsApi.updateChatTitle(chatId, firstWords);
+      setChats((prev) =>
+        prev.map((chat) => (chat.id === chatId ? { ...chat, title: firstWords } : chat))
+      );
     }
 
-    setMessages([...messages, userMessage]);
     setIsStreaming(true);
     setStreamingMessage('');
 
@@ -144,21 +182,13 @@ export default function ChatPage() {
       },
       async () => {
         setIsStreaming(false);
-        const assistantMessage = await messagesApi.createMessage(
-          currentChatId,
-          'assistant',
-          fullResponse
-        );
+        const assistantMessage = await messagesApi.createMessage(chatId, 'assistant', fullResponse);
         if (assistantMessage) {
-          setMessages([...messages, userMessage, assistantMessage]);
+          setMessages((prev) => [...prev, assistantMessage]);
           setStreamingMessage('');
-
-          if (messages.length === 0) {
-            const title = content.slice(0, 50) + (content.length > 50 ? '...' : '');
-            await chatsApi.updateChatTitle(currentChatId, title);
-            loadChats();
-          }
         }
+        userScrolledRef.current = false;
+        scrollToBottom('smooth');
       },
       (error) => {
         setIsStreaming(false);
@@ -187,16 +217,11 @@ export default function ChatPage() {
     if (lastUserMessageIndex === -1) return;
 
     const messagesToKeep = messages.slice(0, lastUserMessageIndex + 1);
-    const lastUserMessage = messages[lastUserMessageIndex];
-
-    if (messages.length > lastUserMessageIndex + 1) {
-      const lastAssistantMessage = messages[lastUserMessageIndex + 1];
-      await messagesApi.deleteMessage(lastAssistantMessage.id);
-    }
 
     setMessages(messagesToKeep);
     setIsStreaming(true);
     setStreamingMessage('');
+    userScrolledRef.current = false;
 
     const conversationHistory = messagesToKeep.map((msg) => ({
       role: msg.role,
@@ -227,6 +252,8 @@ export default function ChatPage() {
           setMessages([...messagesToKeep, assistantMessage]);
           setStreamingMessage('');
         }
+        userScrolledRef.current = false;
+        scrollToBottom('smooth');
       },
       (error) => {
         setIsStreaming(false);
@@ -290,7 +317,11 @@ export default function ChatPage() {
           )}
         </div>
 
-        <ScrollArea className="flex-1 p-4" ref={scrollRef}>
+        <div
+          ref={messagesContainerRef}
+          onScroll={handleScroll}
+          className="flex-1 overflow-y-auto p-4 scroll-smooth"
+        >
           {messages.length === 0 && !isStreaming ? (
             <div className="h-full flex items-center justify-center">
               <div className="text-center space-y-4 max-w-2xl mx-auto p-8">
@@ -331,7 +362,7 @@ export default function ChatPage() {
               </div>
             </div>
           ) : (
-            <div className="max-w-4xl mx-auto space-y-4">
+            <div className="max-w-4xl mx-auto space-y-6 pb-4">
               {messages.map((message) => (
                 <ChatMessage key={message.id} message={message} />
               ))}
@@ -348,11 +379,14 @@ export default function ChatPage() {
                   isStreaming
                 />
               )}
+              <div ref={messagesEndRef} />
             </div>
           )}
-        </ScrollArea>
+        </div>
 
-        <ChatInput onSend={handleSendMessage} disabled={isStreaming} />
+        <div className="border-t border-border bg-background sticky bottom-0">
+          <ChatInput onSend={handleSendMessage} disabled={isStreaming} />
+        </div>
       </div>
     </div>
   );
