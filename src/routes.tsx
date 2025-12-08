@@ -1,4 +1,7 @@
-import SamplePage from './pages/SamplePage';
+import ChatPage from './pages/ChatPage';
+import LoginPage from './pages/LoginPage';
+import AdminPage from './pages/AdminPage';
+import ProtectedRoute from './components/common/ProtectedRoute';
 import type { ReactNode } from 'react';
 
 interface RouteConfig {
@@ -10,10 +13,31 @@ interface RouteConfig {
 
 const routes: RouteConfig[] = [
   {
-    name: 'Sample Page',
+    name: 'Chat',
     path: '/',
-    element: <SamplePage />
-  }
+    element: (
+      <ProtectedRoute>
+        <ChatPage />
+      </ProtectedRoute>
+    ),
+    visible: false,
+  },
+  {
+    name: 'Login',
+    path: '/login',
+    element: <LoginPage />,
+    visible: false,
+  },
+  {
+    name: 'Admin',
+    path: '/admin',
+    element: (
+      <ProtectedRoute requireAdmin>
+        <AdminPage />
+      </ProtectedRoute>
+    ),
+    visible: false,
+  },
 ];
 
 export default routes;
